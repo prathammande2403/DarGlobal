@@ -1,0 +1,34 @@
+# Environment files and local credentials
+.env
+.env.*
+!.env.example
+!.env.*.example
+secrets/
+credentials/
+*credentials*.json
+*service-account*.json
+*.pem
+*.key
+*.p12
+*.pfx
+*.secret
+*.credentials
+id_rsa
+id_rsa.*
+id_ed25519
+id_ed25519.*
+
+# Local logs, caches, and Python environments
+*.log
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local vector indexes and database files
+data/chroma*/
+*.db
+*.sqlite
+*.sqlite3
+.env.groq
