@@ -1,0 +1,29 @@
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    ANONYMIZED_TELEMETRY=False \
+    FASTEMBED_CACHE_PATH=/home/app/.cache/fastembed \
+    FASTEMBED_THREADS=1
+
+WORKDIR /app
+
+RUN useradd --create-home --shell /usr/sbin/nologin app
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements-docker.txt ./requirements-docker.txt
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r requirements-docker.txt
+
+COPY --chown=app:app . .
+RUN mkdir -p /app/data/chroma_updated /app/data/raw/cache /home/app/.cache/fastembed \
+    && chown -R app:app /app/data /home/app/.cache
+
+USER app
+
+EXPOSE 8501
+
+ENTRYPOINT ["sh", "/app/docker-entrypoint.sh"]
+CMD ["sh", "-c", "exec streamlit run ui/app.py --server.port ${PORT:-8501} --server.address 0.0.0.0"]
