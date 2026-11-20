@@ -257,6 +257,16 @@ class TestDarGlobalScraper(unittest.TestCase):
         self.assertIsNone(record["currency"])
         self.assertIsNone(record["bedrooms"])
 
+    def test_blog_listing_extracts_cards_without_main_wrapper(self) -> None:
+        summary = "A useful blog summary about luxury property investment, buyer considerations, and global market trends. " * 5
+        html = f"""<html><body><h1>Blogs</h1><article><time>Nov 13, 2026</time>
+        <h2>A sample DarGlobal blog title</h2><p>{summary}</p>
+        </article></body></html>"""
+        record = parse_page(html, "https://darglobal.co.uk/blog")
+        self.assertEqual(record["page_type"], "news")
+        self.assertIn("A sample DarGlobal blog title", record["description"])
+        self.assertEqual(record["article_date"], "Nov 13, 2026")
+
     def test_page_type_detection(self) -> None:
         """Verify URL and DOM-based page classification."""
         self.assertEqual(detect_page_type("https://darglobal.co.uk/projects/villas"), "project")

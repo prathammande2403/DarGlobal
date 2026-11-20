@@ -41,6 +41,21 @@ class TestRAGGraphNodes(unittest.TestCase):
         state_ws: GraphState = {"question": "Find apartments in Dubai with 2 bedrooms"}
         self.assertEqual(classify_node(state_ws)["route"], "rag")
 
+        # A pricing follow-up must stay in the DarGlobal RAG flow even when
+        # it does not repeat a project or company name.
+        state_pricing: GraphState = {"question": "what are their pricing"}
+        self.assertEqual(classify_node(state_pricing)["route"], "rag")
+
+        state_blog: GraphState = {
+            "question": "what was that blog about"
+        }
+        self.assertEqual(classify_node(state_blog)["route"], "rag")
+        self.assertEqual(detect_document_type(state_blog["question"]), "news")
+
+        state_offices: GraphState = {"question": "Where are DarGlobal's offices located?"}
+        self.assertEqual(classify_node(state_offices)["route"], "rag")
+        self.assertEqual(detect_document_type(state_offices["question"]), "corporate")
+
     @patch("rag.graph.call_llm", return_value="out_of_scope")
     def test_classify_out_of_scope_with_llm(self, mock_llm: MagicMock) -> None:
         """Verify unrelated questions route to out_of_scope via LLM."""

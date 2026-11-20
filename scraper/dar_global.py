@@ -288,7 +288,7 @@ def extract_html_metadata(soup: BeautifulSoup, url: str) -> dict[str, Any]:
     # Starting Price & Currency
     starting_price, currency = None, None
     price_match = re.search(
-        r"(?:Starting\s+(?:from|at)|Prices?\s+from|From)\s*([£$€]|AED|GBP|USD|EUR)?\s*([\d,]+(?:\.\d+)?)\s*(AED|GBP|USD|EUR)?",
+        r"(?:Starting\s+(?:from|at)|Prices?\s+from)\s*([£$€]|AED|GBP|USD|EUR|OMR|SAR|QAR)?\s*([\d,]{4,}(?:\.\d+)?)\s*(AED|GBP|USD|EUR|OMR|SAR|QAR)?",
         page_text,
         re.IGNORECASE,
     )
@@ -299,7 +299,7 @@ def extract_html_metadata(soup: BeautifulSoup, url: str) -> dict[str, Any]:
     else:
         # Secondary search: e.g. "AED 2,500,000" or "GBP 1,200,000"
         standalone_price = re.search(
-            r"\b(AED|GBP|USD|EUR|[£$€])\s*([\d,]{4,})\b",
+            r"\b(AED|GBP|USD|EUR|OMR|SAR|QAR|[£$€])\s*([\d,]{5,}(?:\.\d+)?)\b",
             page_text,
         )
         if standalone_price:
@@ -399,15 +399,24 @@ def extract_html_metadata(soup: BeautifulSoup, url: str) -> dict[str, Any]:
     return data
 
 
-def extract_primary_content(soup: BeautifulSoup) -> str:
+def extract_primary_content(soup: BeautifulSoup, url: Optional[str] = None) -> str:
     """Extract readable page content from main/article sections, not just meta text."""
-    root = soup.find("main") or soup.find("article") or soup.find(attrs={"role": "main"})
+    path = urllib.parse.urlparse(url or "").path.lower().rstrip("/")
+    is_listing = path in ("/blog", "/press", "/news", "/insights")
+    root = soup.find("main") or soup.find(attrs={"role": "main"})
+    if root is None and not is_listing:
+        root = soup.find("article")
+    if root is None:
+        # Some DarGlobal templates render article cards directly under body
+        # without a semantic main/article wrapper. Preserve headings, dates,
+        # and excerpts so blog and press indexes remain useful to retrieval.
+        root = soup.body
     if root is None:
         return ""
 
     parts = [
         node.get_text(" ", strip=True)
-        for node in root.find_all(["h1", "h2", "h3", "h4", "p", "li"])
+        for node in root.find_all(["h1", "h2", "h3", "h4", "p", "li", "time"])
     ]
     parts = [part for part in parts if part]
     return "\n".join(parts).strip()
@@ -448,9 +457,20 @@ def parse_page(html_content: str, url: str) -> dict[str, Any]:
 
     # 3. HTML parsing fallback
     html_data = extract_html_metadata(soup, url)
-    primary_content = extract_primary_content(soup)
+    primary_content = extract_primary_content(soup, url)
     if len(primary_content) > 300:
         html_data["description"] = primary_content
+
+    # Preserve publication dates for blog posts and press releases.
+    page_text = soup.get_text(" ", strip=True)
+    article_date = None
+    date_match = re.search(
+        r"\b((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+\d{4}|\d{1,2}/\d{1,2}/\d{4})\b",
+        page_text,
+        re.IGNORECASE,
+    )
+    if date_match and page_type == "news":
+        article_date = date_match.group(1).strip()
 
     # Merge with precedence: JSON-LD > embedded JSON > HTML fallback
     def pick_value(key: str, default: Any = None) -> Any:
@@ -502,6 +522,7 @@ def parse_page(html_content: str, url: str) -> dict[str, Any]:
         "status": pick_value("status", None),
         "amenities": pick_value("amenities", []) or [],
         "description": pick_value("description", None),
+        "article_date": article_date,
         "key_facts": key_facts,
         "image_urls": pick_value("image_urls", []) or [],
         "scraped_at": datetime.now(timezone.utc).isoformat(),

@@ -30,7 +30,11 @@ ON_TOPIC_TERMS = (
     "residence", "project", "location", "dubai", "muscat", "oman", "maldives",
     "london", "spain", "marbella", "qatar", "saudi", "riyadh", "jeddah",
     "amenities", "pool", "bedrooms", "status", "completion", "sold out",
-    "launch", "developer", "company", "news", "about", "hello", "hi", "thanks", "how are you",
+    "launch", "developer", "company", "news", "about", "price", "prices",
+    "pricing", "cost", "payment plan", "installment", "starting price",
+    "blog", "blogs", "press", "article", "articles", "announcement", "announcements",
+    "office", "offices", "headquarters", "head office",
+    "hello", "hi", "thanks", "how are you",
     # Company footprint questions are in scope, even when phrased without a
     # DarGlobal/property keyword (for example, "how many countries do you operate in?").
     "country", "countries", "operate", "operates", "operating", "market", "markets",

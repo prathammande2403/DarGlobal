@@ -11,22 +11,16 @@ import hashlib
 import json
 import logging
 from pathlib import Path
-import re
 from typing import Any, Optional
 
 import chromadb
 from fastembed import TextEmbedding
-from rag.guards import PRICE_PATTERN, contains_removable_price_sentence, strip_price_sentences
-
 logger = logging.getLogger(__name__)
 
 DEFAULT_INPUT_FILE = Path("data/raw/darglobal.json")
 DEFAULT_CHROMA_DIR = Path("data/chroma_updated")
 DEFAULT_COLLECTION_NAME = "real_estate_collection"
 DEFAULT_MODEL_NAME = "BAAI/bge-small-en-v1.5"
-PRICE_REMOVED_CHUNKS = 0
-
-
 def format_record_header(record: dict[str, Any]) -> str:
     """Construct standard chunk header: '[Source | page_type | Location] Title'."""
     raw_source = record.get("source", "DarGlobal")
@@ -68,6 +62,14 @@ def format_record_body(record: dict[str, Any]) -> str:
     if record.get("property_type"):
         parts.append(f"Property Type: {record['property_type']}")
 
+    # Preserve explicitly extracted starting prices in retrieval text. The
+    # scraper only writes this field when it sees a price cue and a plausible
+    # amount; currency is kept exactly as published.
+    price = record.get("starting_price") or record.get("price")
+    currency = record.get("currency")
+    if price:
+        parts.append(f"Starting Price: {price}{f' {currency}' if currency else ''}")
+
     specs = []
     if record.get("bedrooms"):
         specs.append(f"Bedrooms: {record['bedrooms']}")
@@ -79,6 +81,9 @@ def format_record_body(record: dict[str, Any]) -> str:
         parts.append(" | ".join(specs))
 
     # Status & Dates
+    if record.get("article_date"):
+        parts.append(f"Publication Date: {record['article_date']}")
+
     timing = []
     if record.get("status"):
         timing.append(f"Status: {record['status']}")
@@ -100,20 +105,20 @@ def format_record_body(record: dict[str, Any]) -> str:
         facts_lines = [
             f"  - {k}: {v}"
             for k, v in key_facts.items()
-            if v and not re.search(r"price|pricing|currency|cost", str(k), re.IGNORECASE)
+            if v
         ]
         if facts_lines:
-            parts.append(strip_price_sentences("Key Facts:\n" + "\n".join(facts_lines)))
+            parts.append("Key Facts:\n" + "\n".join(facts_lines))
 
     # Description (English)
     desc = record.get("description")
     if desc:
-        parts.append(strip_price_sentences(f"Description:\n{desc}"))
+        parts.append(f"Description:\n{desc}")
 
     # Description (Arabic)
     desc_ar = record.get("description_ar")
     if desc_ar:
-        parts.append(strip_price_sentences(f"Arabic Description:\n{desc_ar}"))
+        parts.append(f"Arabic Description:\n{desc_ar}")
 
     return "\n\n".join(parts)
 
@@ -156,6 +161,9 @@ def chunk_record(
         ),
         "property_type": str(record.get("property_type") or ""),
         "title": str(record.get("title") or ""),
+        "price": str(record.get("starting_price") or record.get("price") or ""),
+        "currency": str(record.get("currency") or ""),
+        "article_date": str(record.get("article_date") or ""),
     }
 
     words = body.split()
@@ -196,25 +204,10 @@ def chunk_record(
 
 
 def build_chunks(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Transform a list of raw records into a list of chunk dicts."""
-    global PRICE_REMOVED_CHUNKS
-    PRICE_REMOVED_CHUNKS = 0
+    """Transform records into chunks while preserving source content."""
     all_chunks: list[dict[str, Any]] = []
     for rec in records:
-        built = chunk_record(rec)
-        raw_price_text = str(rec.get("description") or "") + " " + str(rec.get("description_ar") or "")
-        facts = rec.get("key_facts") or {}
-        if isinstance(facts, dict):
-            raw_price_text += " " + " ".join(str(v) for k, v in facts.items() if "price" in str(k).lower() or "currency" in str(k).lower() or PRICE_PATTERN.search(str(v)))
-        if contains_removable_price_sentence(raw_price_text):
-            PRICE_REMOVED_CHUNKS += len(built)
-        for chunk in built:
-            text = chunk["text"]
-            cleaned = strip_price_sentences(text)
-            if cleaned != text:
-                PRICE_REMOVED_CHUNKS += 1
-            chunk["text"] = cleaned
-        all_chunks.extend(built)
+        all_chunks.extend(chunk_record(rec))
     return all_chunks
 
 
@@ -262,7 +255,6 @@ def ingest(
 
     # 2. Chunk records
     chunks = build_chunks(records)
-    print(f"Chunks with price text removed: {PRICE_REMOVED_CHUNKS}")
     if not chunks:
         logger.warning("No chunks generated from %d records", len(records))
         return 0

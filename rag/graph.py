@@ -21,7 +21,7 @@ from typing import Any, Optional, TypedDict
 from langgraph.graph import END, StateGraph
 
 from rag.llm import call_llm
-from rag.guards import PRICE_PATTERN, is_on_topic, is_price_question, is_prompt_injection, strip_price_sentences
+from rag.guards import is_on_topic, is_prompt_injection
 from rag.prompts import (
     CHITCHAT_RESPONSE,
     CLASSIFY_PROMPT,
@@ -56,7 +56,6 @@ class GraphState(TypedDict, total=False):
 TRANSIENT_ERROR_ANSWER = "I'm having trouble answering that right now. Please try again in a moment."
 MODEL_UNAVAILABLE_ANSWER = "The AI model is unavailable right now. Please try again shortly."
 TOPIC_REFUSAL = "I can only help with Dar Global properties and company information. Try asking about projects, locations or amenities."
-PRICE_REFUSAL = "I can't share pricing here. Please check the official Dar Global website or contact their sales team for current prices. I can help with location, type, amenities or status instead."
 BRACKETED_TAG_PATTERN = re.compile(r"\[[^\]]*\|[^\]]*\]")
 UNAVAILABLE_ANSWER_PATTERN = re.compile(
     r"\b(?:i\s+(?:do\s+not|don't)\s+have\s+that\s+information|"
@@ -69,13 +68,12 @@ UNAVAILABLE_ANSWER_PATTERN = re.compile(
 
 def _guard_output(text: str) -> str:
     """Apply the final deterministic output filter."""
-    if text in (TRANSIENT_ERROR_ANSWER, SAFE_FALLBACK_ANSWER, TOPIC_REFUSAL, PRICE_REFUSAL, CHITCHAT_RESPONSE, OUT_OF_SCOPE_RESPONSE):
+    if text in (TRANSIENT_ERROR_ANSWER, SAFE_FALLBACK_ANSWER, TOPIC_REFUSAL, CHITCHAT_RESPONSE, OUT_OF_SCOPE_RESPONSE):
         return text
     if UNAVAILABLE_ANSWER_PATTERN.search(text):
         return SAFE_FALLBACK_ANSWER
     try:
-        answer = strip_price_sentences(text)
-        answer = BRACKETED_TAG_PATTERN.sub("", answer).strip()
+        answer = BRACKETED_TAG_PATTERN.sub("", text).strip()
         # LLMs sometimes place ordered-list headings after prose on the same
         # line. Separate each inline numbered heading for readable rendering.
         answer = re.sub(
@@ -83,8 +81,7 @@ def _guard_output(text: str) -> str:
             r"\1\n\n",
             answer,
         )
-        if PRICE_PATTERN.search(answer) or BRACKETED_TAG_PATTERN.search(answer):
-            answer = strip_price_sentences(answer)
+        if BRACKETED_TAG_PATTERN.search(answer):
             answer = BRACKETED_TAG_PATTERN.sub("", answer).strip()
         if not answer:
             try:
@@ -123,8 +120,6 @@ def classify_node(state: GraphState) -> dict[str, Any]:
 
     if is_prompt_injection(question):
         return {"route": "direct_reply", "answer": TOPIC_REFUSAL, "citations": [], "docs": []}
-    if is_price_question(question):
-        return {"route": "direct_reply", "answer": PRICE_REFUSAL, "citations": [], "docs": []}
     if not is_on_topic(question):
         return {"route": "out_of_scope"}
 
@@ -433,7 +428,7 @@ def verify_node(state: GraphState) -> dict[str, Any]:
     verify_retries = state.get("verify_retry_count", 0)
 
     if answer in (SAFE_FALLBACK_ANSWER, TRANSIENT_ERROR_ANSWER, MODEL_UNAVAILABLE_ANSWER,
-                  CHITCHAT_RESPONSE, OUT_OF_SCOPE_RESPONSE, TOPIC_REFUSAL, PRICE_REFUSAL):
+                  CHITCHAT_RESPONSE, OUT_OF_SCOPE_RESPONSE, TOPIC_REFUSAL):
         return {"grounded": True, "answer": _guard_output(answer)}
 
     doc_text_combined = " ".join(d.get("text", "") for d in docs).lower()
@@ -462,7 +457,7 @@ def verify_node(state: GraphState) -> dict[str, Any]:
             logger.exception("Generated answer failed groundedness verification")
         return {
             "grounded": False,
-            "answer": TRANSIENT_ERROR_ANSWER,
+            "answer": SAFE_FALLBACK_ANSWER,
             "verify_retry_count": 1,
         }
 
@@ -562,7 +557,7 @@ def answer_question(
         "answer": final_state.get("answer", SAFE_FALLBACK_ANSWER),
         "citations": final_state.get("citations", []),
         "route": final_state.get("route", "rag"),
-        "retrieved_docs": [],
+        "retrieved_docs": final_state.get("docs", []),
 }
 
 
