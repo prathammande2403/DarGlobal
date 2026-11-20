@@ -1,6 +1,5 @@
 # DarGlobal Real Estate Scraper & RAG Chatbot
 
-Technical assignment: Scrape public property data from DarGlobal (`darglobal.co.uk`), then build a grounded Retrieval-Augmented Generation (RAG) chatbot over the collected data.
 
 ## Stack
 
@@ -81,7 +80,7 @@ cp .env.example .env
 
 For temporary Groq testing, put your Groq API key in the separate `.env.groq`
 file and select it before starting the API. This leaves `.env` configured for
-OpenRouter so you can switch back for submission by unsetting `LLM_ENV_FILE`.
+OpenRouter so you can switch back when limit exceeds by unsetting `LLM_ENV_FILE`.
 
 ```powershell
 $env:LLM_ENV_FILE = ".env.groq"
