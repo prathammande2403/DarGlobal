@@ -1,13 +1,9 @@
 #!/bin/sh
 set -eu
 
-INDEX_DIR="/app/data/chroma_updated"
-READY_MARKER="${INDEX_DIR}/.initialized"
-
-if [ ! -f "$READY_MARKER" ]; then
-    echo "Building the Chroma index from data/raw/darglobal.json (first run downloads the FastEmbed model)."
-    python -m rag.ingest
-    touch "$READY_MARKER"
+if [ ! -f "/app/data/chroma_updated/chroma.sqlite3" ]; then
+    echo "The image does not contain a Chroma index. Rebuild it with docker compose build."
+    exit 1
 fi
 
 exec "$@"

@@ -9,8 +9,6 @@ services:
       - "8000:8000"
     volumes:
       - ./data/raw:/app/data/raw
-      - chroma_data:/app/data/chroma_updated
-      - fastembed_cache:/home/app/.cache/fastembed
     restart: unless-stopped
     healthcheck:
       test:
@@ -47,6 +45,3 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-volumes:
-  chroma_data:
-  fastembed_cache:

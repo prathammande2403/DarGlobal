@@ -128,10 +128,12 @@ Open http://localhost:8501 in your browser to chat.
 ### Run with Docker
 
 Docker Compose starts the FastAPI backend and Streamlit UI in separate
-containers. The first API startup builds the Chroma index from
-`data/raw/darglobal.json` and downloads the FastEmbed model; this needs network
-access. The index and embedding model are stored in Docker volumes, while the
-raw data directory is mounted from the project so local data updates are used.
+containers. The Docker image build downloads the FastEmbed model and builds
+the Chroma index from `data/raw/darglobal.json`. This requires network access
+during the image build, but keeps model download and indexing out of the
+memory-limited service startup. Docker uses `requirements-docker.txt`, which
+omits unused ML/test packages such as Torch. FastEmbed uses one thread in the
+container.
 
 ```bash
 cp .env.example .env
@@ -140,12 +142,11 @@ docker compose up --build
 ```
 
 Open http://localhost:8501 for the chatbot and http://localhost:8000/docs for
-the API. Stop the services with `docker compose down`; the named index and model
-volumes are retained. To rebuild the index after updating the raw JSON, run:
+the API. Stop the services with `docker compose down`. After updating the raw
+JSON, rebuild the image so it contains a matching index:
 
 ```bash
-docker compose run --rm api python -m rag.ingest
-docker compose restart api
+docker compose up --build -d
 ```
 
 The scraper endpoint remains disabled unless `ENABLE_SCRAPE_ENDPOINT=true` is

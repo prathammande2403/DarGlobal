@@ -104,7 +104,11 @@ class HybridRetriever:
         """Lazy loader for fastembed TextEmbedding model."""
         if self._embedder is None:
             logger.info("Initializing fastembed model '%s'...", self.model_name)
-            self._embedder = TextEmbedding(model_name=self.model_name)
+            configured_threads = os.getenv("FASTEMBED_THREADS")
+            self._embedder = TextEmbedding(
+                model_name=self.model_name,
+                threads=int(configured_threads) if configured_threads else None,
+            )
         return self._embedder
 
     def _initialize_corpus(self) -> None:

@@ -10,6 +10,7 @@ from collections import Counter
 import hashlib
 import json
 import logging
+import os
 from pathlib import Path
 from typing import Any, Optional
 
@@ -265,7 +266,11 @@ def ingest(
 
     # 3. Generate embeddings locally
     logger.info("Embedding %d chunks with model %s...", len(chunks), model_name)
-    embedder = embedding_model or TextEmbedding(model_name=model_name)
+    configured_threads = os.getenv("FASTEMBED_THREADS")
+    embedder = embedding_model or TextEmbedding(
+        model_name=model_name,
+        threads=int(configured_threads) if configured_threads else None,
+    )
     raw_embeddings = list(embedder.embed(chunk_texts))
     embeddings = [v.tolist() for v in raw_embeddings]
 
